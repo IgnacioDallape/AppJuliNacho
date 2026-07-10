@@ -10,9 +10,14 @@ if (!url || !key) {
   );
 }
 
-export const supabase = createClient(url ?? "", key ?? "", {
-  auth: { persistSession: false },
-});
+// Usamos placeholders si faltan las variables para que el build NO se rompa
+// (createClient lanza si la URL está vacía). En runtime, sin variables reales,
+// las consultas fallan y la app muestra la pantalla "sin conexión".
+export const supabase = createClient(
+  url || "https://placeholder.supabase.co",
+  key || "placeholder-anon-key",
+  { auth: { persistSession: false } }
+);
 
 // Nombres de tabla (prefijo casa_ para convivir con otras apps
 // en el mismo proyecto Supabase). Cambiá el prefijo acá si hace falta.
