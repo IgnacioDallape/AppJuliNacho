@@ -6,6 +6,7 @@ import {
   getCuotasDelMes,
   getGastosDelMes,
   getIngresosDelMes,
+  getPendienteTarjetas,
   type CuotaConContexto,
 } from "./data";
 import { calcularResumen, type ResumenMes } from "./resumen";
@@ -18,18 +19,21 @@ export function useMonthData() {
   const [cuotas, setCuotas] = useState<CuotaConContexto[]>([]);
   const [loading, setLoading] = useState(true);
   const [resumen, setResumen] = useState<ResumenMes | null>(null);
+  const [pendienteTarjetas, setPendienteTarjetas] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [i, g, c] = await Promise.all([
+      const [i, g, c, pend] = await Promise.all([
         getIngresosDelMes(month),
         getGastosDelMes(month),
         getCuotasDelMes(month),
+        getPendienteTarjetas(month),
       ]);
       setIngresos(i);
       setGastos(g);
       setCuotas(c);
+      setPendienteTarjetas(pend);
       setResumen(
         calcularResumen({ usuarios, categorias, ingresos: i, gastos: g, cuotas: c })
       );
@@ -43,5 +47,5 @@ export function useMonthData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, version, usuarios.length, categorias.length]);
 
-  return { ingresos, gastos, cuotas, resumen, loading, reload: load };
+  return { ingresos, gastos, cuotas, resumen, pendienteTarjetas, loading, reload: load };
 }

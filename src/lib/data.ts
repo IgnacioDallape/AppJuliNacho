@@ -208,6 +208,19 @@ export async function getCuotasDelMes(mk: string): Promise<CuotaConContexto[]> {
   return (data ?? []) as unknown as CuotaConContexto[];
 }
 
+// Total pendiente de tarjetas: suma de todas las cuotas de este mes en adelante.
+export async function getPendienteTarjetas(mk: string): Promise<number> {
+  const { data, error } = await supabase
+    .from(T.cuotas)
+    .select("importe")
+    .gte("mes", mk);
+  if (error) throw error;
+  return (data ?? []).reduce(
+    (s, c: { importe: number }) => s + Number(c.importe),
+    0
+  );
+}
+
 // Todas las cuotas de una tarjeta (para ver cuotas futuras / pendiente)
 export async function getCuotasDeTarjeta(tarjeta_id: string): Promise<CuotaConContexto[]> {
   const { data, error } = await supabase
