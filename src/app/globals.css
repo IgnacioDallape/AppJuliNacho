@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  --bg: #f7f3ec;
+  --surface: #ffffff;
+  --surface-2: #f1ebe1;
+  --border: #e7ded1;
+  --text: #2b2925;
+  --muted: #8c857a;
+
+  --accent: #d9653f;
+  --accent-soft: #f8e6dd;
+  --accent-strong: #d9653f;
+  --on-accent: #ffffff;
+  --income: #2f9e6f;
+  --income-soft: #ddf1e7;
+  --expense: #d34c47;
+  --expense-soft: #f8e0de;
+}
+
+/* ===== Tema de Juli (rosas + lavanda) ===== */
+:root[data-user="juli"] {
+  --bg: #fbefef;
+  --surface: #ffffff;
+  --surface-2: #fce6e6;
+  --border: #f2d2d6;
+  --accent: #c5b3d3;
+  --accent-soft: #f3eaf8;
+  --accent-strong: #7e5e96;
+  --on-accent: #3e2e4e;
+}
+.dark[data-user="juli"] {
+  --bg: #1a1518;
+  --surface: #241d22;
+  --surface-2: #2e2530;
+  --border: #3a2f3c;
+  --accent: #c5b3d3;
+  --accent-soft: #33283a;
+  --accent-strong: #d9c7e6;
+  --on-accent: #2a2233;
+}
+
+/* ===== Tema de Nacho (verdes + crema) ===== */
+:root[data-user="nacho"] {
+  --bg: #fdf6ed;
+  --surface: #ffffff;
+  --surface-2: #f0e8db;
+  --border: #e4d9c9;
+  --accent: #778873;
+  --accent-soft: #e7eee1;
+  --accent-strong: #566451;
+  --on-accent: #ffffff;
+}
+.dark[data-user="nacho"] {
+  --bg: #14160f;
+  --surface: #1e211a;
+  --surface-2: #282c22;
+  --border: #363b2e;
+  --accent: #a1bc98;
+  --accent-soft: #2a3125;
+  --accent-strong: #b8cfb0;
+  --on-accent: #22271d;
+}
+
+.dark {
+  --bg: #17150f;
+  --surface: #211e17;
+  --surface-2: #2a261d;
+  --border: #362f24;
+  --text: #f0ebe1;
+  --muted: #a49a89;
+
+  --accent: #e8825b;
+  --accent-soft: #3a2618;
+  --accent-strong: #e8825b;
+  --on-accent: #ffffff;
+  --income: #4cc088;
+  --income-soft: #16301f;
+  --expense: #e5675f;
+  --expense-soft: #331917;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+/* Ocultar spinners de inputs numéricos */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@layer components {
+  .card {
+    @apply bg-surface border border-border rounded-2xl;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium transition active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply btn bg-accent px-4 py-3;
+    color: var(--on-accent);
+  }
+  .btn-ghost {
+    @apply btn border border-border bg-surface px-4 py-3;
+  }
+  .field {
+    @apply w-full rounded-xl border border-border bg-surface px-3 py-3 text-[16px] outline-none focus:border-accent;
+    color: var(--text);
+  }
+  .label {
+    @apply block text-[13px] text-muted mb-1.5;
+  }
+  .seg {
+    @apply flex-1 text-center rounded-xl py-3 text-[15px] border border-border transition active:scale-[0.98];
+  }
+  .seg-on {
+    @apply border-transparent;
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+}
+
+/* input date en modo oscuro */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
