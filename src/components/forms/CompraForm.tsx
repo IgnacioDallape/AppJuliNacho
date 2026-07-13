@@ -13,7 +13,7 @@ import type { CompraTarjeta, Tarjeta } from "@/lib/types";
 import { CategorySelect, MoneyInput } from "./fields";
 import { Icon } from "../Icon";
 
-const CUOTAS_RAPIDAS = [1, 3, 6, 9, 12];
+const CUOTAS_RAPIDAS = [1, 3, 6, 9, 12, 18];
 
 export function CompraForm({
   tarjetaInicial,
@@ -62,6 +62,7 @@ export function CompraForm({
     if (importe <= 0 || !tarjetaId || cuotas < 1) return;
     setSaving(true);
     try {
+      const tarjetaSel = tarjetas.find((t) => t.id === tarjetaId);
       const payload = {
         tarjeta_id: tarjetaId,
         importe_total: importe,
@@ -69,9 +70,12 @@ export function CompraForm({
         descripcion: descripcion || null,
         categoria_id: categoriaId,
         cantidad_cuotas: cuotas,
+        pagado_por: editing?.pagado_por ?? null,
+        tipo: editing?.tipo ?? ("personal" as const),
       };
-      if (editing) await actualizarCompraTarjeta(editing.id, payload);
-      else await crearCompraTarjeta(payload);
+      const diaCierre = tarjetaSel?.dia_cierre ?? null;
+      if (editing) await actualizarCompraTarjeta(editing.id, payload, diaCierre);
+      else await crearCompraTarjeta(payload, diaCierre);
       refresh();
       onClose();
     } catch (e) {

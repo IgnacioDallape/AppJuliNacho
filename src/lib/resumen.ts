@@ -1,21 +1,26 @@
 import type { Categoria, Gasto, Ingreso, Usuario } from "./types";
-import type { CuotaConContexto } from "./data";
+
+// Un pago de tarjeta ya resuelto al titular de la tarjeta.
+export interface PagoConTitular {
+  monto: number;
+  titular_id: string | null;
+}
 
 export interface ResumenUsuario {
   usuario: Usuario;
   ingresos: number;
-  gastosPersonales: number; // gastos personales que pagó
+  gastosPersonales: number; // gastos en efectivo personales que pagó
   compartidosPagados: number; // gastos compartidos que pagó (monto completo)
   parteCompartida: number; // su 50% de todos los gastos compartidos
-  gastosTarjeta: number; // cuotas PAGADAS del mes de sus tarjetas
-  totalGastado: number; // personales + parteCompartida + tarjeta pagada
+  gastosTarjeta: number; // pagos de tarjeta del mes de sus tarjetas
+  totalGastado: number; // personales + parteCompartida + pagos de tarjeta
   disponible: number; // ingresos - totalGastado
 }
 
 export interface ResumenPareja {
   ingresos: number;
-  gastosDirectos: number; // todos los gastos (personales + compartidos)
-  gastosTarjeta: number; // cuotas PAGADAS del mes
+  gastosDirectos: number; // gastos en efectivo (personales + compartidos)
+  gastosTarjeta: number; // pagos de tarjeta del mes
   totalGastado: number;
   saldo: number;
   compartidos: number; // total de gastos compartidos
@@ -41,9 +46,9 @@ export function calcularResumen(args: {
   categorias: Categoria[];
   ingresos: Ingreso[];
   gastos: Gasto[];
-  cuotas: CuotaConContexto[];
+  pagos: PagoConTitular[];
 }): ResumenMes {
-  const { usuarios, categorias, ingresos, gastos, cuotas } = args;
+  const { usuarios, categorias, ingresos, gastos, pagos } = args;
 
   const catById = new Map(categorias.map((c) => [c.id, c]));
   const nombreCat = (id: string | null | undefined) =>
@@ -80,18 +85,16 @@ export function calcularResumen(args: {
     else r.compartidosPagados += Number(g.importe);
   }
 
-  // Cuotas PAGADAS del mes por titular de la tarjeta (lo que ya salió del bolsillo)
-  const cuotasPagadas = cuotas.filter((c) => c.pagada);
-  for (const c of cuotasPagadas) {
-    const titular = c.compra?.tarjeta?.titular_id;
-    if (titular && porUsuario[titular]) {
-      porUsuario[titular].gastosTarjeta += Number(c.importe);
+  // Pagos de tarjeta del mes, imputados al titular de la tarjeta.
+  for (const p of pagos) {
+    if (p.titular_id && porUsuario[p.titular_id]) {
+      porUsuario[p.titular_id].gastosTarjeta += Number(p.monto);
     }
   }
 
   for (const u of usuarios) {
     const r = porUsuario[u.id];
-    r.parteCompartida = mitad; // cada uno asume 50% de los compartidos
+    r.parteCompartida = mitad;
     r.totalGastado = r.gastosPersonales + r.parteCompartida + r.gastosTarjeta;
     r.disponible = r.ingresos - r.totalGastado;
   }
@@ -99,22 +102,18 @@ export function calcularResumen(args: {
   // ---- Pareja ----
   const ingresosTot = ingresos.reduce((s, i) => s + Number(i.importe), 0);
   const gastosDirectos = gastos.reduce((s, g) => s + Number(g.importe), 0);
-  const gastosTarjeta = cuotasPagadas.reduce((s, c) => s + Number(c.importe), 0);
+  const gastosTarjeta = pagos.reduce((s, p) => s + Number(p.monto), 0);
 
   const hormigaGastos = gastos.filter((g) => nombreCat(g.categoria_id) === "Gastos hormiga");
   const alquilerYServicios = gastos
     .filter((g) => ["Alquiler", "Servicios"].includes(nombreCat(g.categoria_id)))
     .reduce((s, g) => s + Number(g.importe), 0);
 
-  // Gastos por categoría (directos + cuotas de tarjeta)
+  // Gastos por categoría (solo gastos en efectivo)
   const mapCat = new Map<string, number>();
   for (const g of gastos) {
     const k = nombreCat(g.categoria_id);
     mapCat.set(k, (mapCat.get(k) ?? 0) + Number(g.importe));
-  }
-  for (const c of cuotasPagadas) {
-    const k = nombreCat(c.compra?.categoria_id ?? null);
-    mapCat.set(k, (mapCat.get(k) ?? 0) + Number(c.importe));
   }
   const porCategoria = Array.from(mapCat.entries())
     .map(([nombre, total]) => ({ nombre, total }))

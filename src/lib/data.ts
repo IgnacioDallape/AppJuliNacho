@@ -6,6 +6,7 @@ import type {
   Cuota,
   Gasto,
   Ingreso,
+  PagoTarjeta,
   Tarjeta,
   TipoGasto,
   TipoTarjeta,
@@ -153,6 +154,8 @@ export async function crearTarjeta(input: {
   tipo: TipoTarjeta;
   banco: string;
   nombre?: string | null;
+  dia_cierre?: number | null;
+  dia_vencimiento?: number | null;
 }): Promise<void> {
   const { error } = await supabase.from(T.tarjetas).insert(input);
   if (error) throw error;
@@ -184,33 +187,45 @@ interface CompraInput {
   descripcion?: string | null;
   categoria_id: string | null;
   cantidad_cuotas: number;
+  pagado_por?: string | null;
+  tipo?: TipoGasto;
 }
 
-// Divide el importe en N cuotas mensuales consecutivas (la última absorbe el redondeo).
-function generarCuotas(compra_id: string, input: CompraInput): Omit<Cuota, "id">[] {
+// Genera las cuotas. Regla: la primera cuota (o el total, si es 1) va al PRÓXIMO
+// resumen = el mes siguiente a la compra (o el subsiguiente si la compra es
+// posterior al día de cierre). La cuota k va a primerResumen + (k-1) meses.
+// La última cuota absorbe el redondeo para que la suma dé exacta (sin interés).
+function generarCuotas(
+  compra_id: string,
+  input: CompraInput,
+  diaCierre?: number | null
+): Omit<Cuota, "id">[] {
   const n = Math.max(1, input.cantidad_cuotas);
-  const baseMes = monthOfDate(input.fecha);
+  const dia = parseInt(input.fecha.slice(8, 10), 10);
+  const offset = diaCierre != null && dia > diaCierre ? 2 : 1;
+  const primerResumen = addMonths(monthOfDate(input.fecha), offset);
   const cuotaBase = Math.round((input.importe_total / n) * 100) / 100;
   const filas: Omit<Cuota, "id">[] = [];
-  let acumulado = 0;
   for (let i = 0; i < n; i++) {
     const esUltima = i === n - 1;
     const importe = esUltima
-      ? Math.round((input.importe_total - acumulado) * 100) / 100
+      ? Math.round((input.importe_total - cuotaBase * (n - 1)) * 100) / 100
       : cuotaBase;
-    acumulado += cuotaBase;
     filas.push({
       compra_id,
       numero: i + 1,
       importe,
-      mes: addMonths(baseMes, i),
+      mes: addMonths(primerResumen, i),
       pagada: false,
     });
   }
   return filas;
 }
 
-export async function crearCompraTarjeta(input: CompraInput): Promise<void> {
+export async function crearCompraTarjeta(
+  input: CompraInput,
+  diaCierre?: number | null
+): Promise<void> {
   const { data: compra, error } = await supabase
     .from(T.compras)
     .insert(input)
@@ -218,20 +233,21 @@ export async function crearCompraTarjeta(input: CompraInput): Promise<void> {
     .single();
   if (error) throw error;
 
-  const filas = generarCuotas((compra as CompraTarjeta).id, input);
+  const filas = generarCuotas((compra as CompraTarjeta).id, input, diaCierre);
   const { error: e2 } = await supabase.from(T.cuotas).insert(filas);
   if (e2) throw e2;
 }
 
-// Edita una compra y regenera sus cuotas (se reinicia el estado de pago).
+// Edita una compra y regenera sus cuotas.
 export async function actualizarCompraTarjeta(
   id: string,
-  input: CompraInput
+  input: CompraInput,
+  diaCierre?: number | null
 ): Promise<void> {
   const { error } = await supabase.from(T.compras).update(input).eq("id", id);
   if (error) throw error;
   await supabase.from(T.cuotas).delete().eq("compra_id", id);
-  const filas = generarCuotas(id, input);
+  const filas = generarCuotas(id, input, diaCierre);
   const { error: e2 } = await supabase.from(T.cuotas).insert(filas);
   if (e2) throw e2;
 }
@@ -242,17 +258,67 @@ export async function eliminarCompraTarjeta(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// Marca cuotas como pagadas / no pagadas (pagar el resumen del mes de una tarjeta).
-export async function setCuotasPagadas(
-  ids: string[],
-  pagada: boolean
-): Promise<void> {
-  if (ids.length === 0) return;
-  const { error } = await supabase
-    .from(T.cuotas)
-    .update({ pagada })
-    .in("id", ids);
+// ---------------- Pagos de tarjeta (parciales) ----------------
+
+export async function registrarPagoTarjeta(input: {
+  tarjeta_id: string;
+  monto: number;
+  fecha: string;
+}): Promise<void> {
+  const { error } = await supabase.from("casa_pagos_tarjeta").insert(input);
   if (error) throw error;
+}
+
+export async function eliminarPagoTarjeta(id: string): Promise<void> {
+  const { error } = await supabase.from("casa_pagos_tarjeta").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getPagos(): Promise<PagoTarjeta[]> {
+  const { data, error } = await supabase
+    .from("casa_pagos_tarjeta")
+    .select("*")
+    .order("fecha", { ascending: false });
+  if (error) return []; // la tabla puede no existir aún (antes de la migración)
+  return (data ?? []) as PagoTarjeta[];
+}
+
+// Pagos hechos dentro de un mes (para el disponible del mes).
+export async function getPagosDelMes(mk: string): Promise<PagoTarjeta[]> {
+  const { data, error } = await supabase
+    .from("casa_pagos_tarjeta")
+    .select("*")
+    .gte("fecha", `${mk}-01`)
+    .lte("fecha", `${mk}-31`);
+  if (error) return []; // la tabla puede no existir aún (antes de la migración)
+  return (data ?? []) as PagoTarjeta[];
+}
+
+// Cuota "plana" para proyección/saldos (resuelve tarjeta y descripción vía la compra).
+export interface CuotaPlana {
+  id: string;
+  mes: string;
+  importe: number;
+  numero: number;
+  tarjeta_id: string;
+  descripcion: string | null;
+  total_cuotas: number;
+}
+
+export async function getCuotasPlanas(): Promise<CuotaPlana[]> {
+  const { data, error } = await supabase
+    .from(T.cuotas)
+    .select(`id, mes, importe, numero, compra:${T.compras}(tarjeta_id, descripcion, cantidad_cuotas)`);
+  if (error) throw error;
+  return (data ?? []).map((c: any) => ({
+    id: c.id,
+    mes: c.mes,
+    importe: Number(c.importe),
+    numero: c.numero,
+    tarjeta_id: c.compra?.tarjeta_id ?? "",
+    descripcion: c.compra?.descripcion ?? null,
+    total_cuotas: c.compra?.cantidad_cuotas ?? 1,
+  }));
 }
 
 // Cuotas de un mes con su compra y tarjeta (para Inicio / Resumen / Tarjetas)
@@ -265,17 +331,22 @@ export async function getCuotasDelMes(mk: string): Promise<CuotaConContexto[]> {
   return (data ?? []) as unknown as CuotaConContexto[];
 }
 
-// Deuda de tarjetas: suma de todas las cuotas que todavía NO se pagaron.
+// Deuda total de tarjetas = suma de TODAS las cuotas − suma de TODOS los pagos.
 export async function getPendienteTarjetas(): Promise<number> {
-  const { data, error } = await supabase
-    .from(T.cuotas)
-    .select("importe")
-    .eq("pagada", false);
-  if (error) throw error;
-  return (data ?? []).reduce(
+  const [cuotas, pagos] = await Promise.all([
+    supabase.from(T.cuotas).select("importe"),
+    supabase.from("casa_pagos_tarjeta").select("monto"),
+  ]);
+  if (cuotas.error) throw cuotas.error;
+  const totalCuotas = (cuotas.data ?? []).reduce(
     (s, c: { importe: number }) => s + Number(c.importe),
     0
   );
+  // pagos puede fallar si la tabla no existe aún (antes de la migración)
+  const totalPagos = pagos.error
+    ? 0
+    : (pagos.data ?? []).reduce((s, p: { monto: number }) => s + Number(p.monto), 0);
+  return totalCuotas - totalPagos;
 }
 
 // Todas las cuotas de una tarjeta (para ver cuotas futuras / pendiente)

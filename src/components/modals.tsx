@@ -13,7 +13,7 @@ import type { CompraTarjeta, Gasto, Ingreso, Tarjeta } from "@/lib/types";
 type Modal =
   | { kind: "menu" }
   | { kind: "ingreso"; editing?: Ingreso | null }
-  | { kind: "gasto"; editing?: Gasto | null }
+  | { kind: "gasto"; editing?: Gasto | null; conTarjeta?: boolean; tarjetaInicial?: string }
   | { kind: "tarjeta"; titular?: string; editing?: Tarjeta | null }
   | { kind: "compra"; tarjeta?: string; editing?: CompraTarjeta | null }
   | { kind: "categorias" }
@@ -23,6 +23,7 @@ interface ModalsApi {
   openMenu: () => void;
   openIngreso: (editing?: Ingreso | null) => void;
   openGasto: (editing?: Gasto | null) => void;
+  openGastoTarjeta: (tarjetaInicial?: string) => void;
   openTarjeta: (titular?: string, editing?: Tarjeta | null) => void;
   openCompra: (tarjeta?: string, editing?: CompraTarjeta | null) => void;
   openCategorias: () => void;
@@ -46,6 +47,8 @@ export function ModalsProvider({ children }: { children: React.ReactNode }) {
       openMenu: () => setModal({ kind: "menu" }),
       openIngreso: (editing) => setModal({ kind: "ingreso", editing }),
       openGasto: (editing) => setModal({ kind: "gasto", editing }),
+      openGastoTarjeta: (tarjetaInicial) =>
+        setModal({ kind: "gasto", conTarjeta: true, tarjetaInicial }),
       openTarjeta: (titular, editing) => setModal({ kind: "tarjeta", titular, editing }),
       openCompra: (tarjeta, editing) => setModal({ kind: "compra", tarjeta, editing }),
       openCategorias: () => setModal({ kind: "categorias" }),
@@ -80,7 +83,7 @@ export function ModalsProvider({ children }: { children: React.ReactNode }) {
             fg="var(--on-accent)"
             title="Gasto de tarjeta"
             desc="Compras y cuotas"
-            onClick={() => setModal({ kind: "compra" })}
+            onClick={() => setModal({ kind: "gasto", conTarjeta: true })}
           />
         </div>
       </Sheet>
@@ -97,10 +100,26 @@ export function ModalsProvider({ children }: { children: React.ReactNode }) {
 
       <Sheet
         open={modal?.kind === "gasto"}
-        title={modal?.kind === "gasto" && modal.editing ? "Editar gasto" : "Agregar gasto"}
+        title={
+          modal?.kind === "gasto"
+            ? modal.editing
+              ? "Editar gasto"
+              : modal.conTarjeta
+                ? "Compra con tarjeta"
+                : "Agregar gasto"
+            : ""
+        }
         onClose={close}
       >
-        {modal?.kind === "gasto" && <GastoForm editing={modal.editing} onClose={close} />}
+        {modal?.kind === "gasto" && (
+          <GastoForm
+            editing={modal.editing}
+            conTarjeta={modal.conTarjeta}
+            tarjetaInicial={modal.tarjetaInicial}
+            onAddTarjeta={() => setModal({ kind: "tarjeta" })}
+            onClose={close}
+          />
+        )}
       </Sheet>
 
       <Sheet

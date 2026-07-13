@@ -44,6 +44,8 @@ export interface Tarjeta {
   tipo: TipoTarjeta;
   banco: string;
   nombre: string | null;
+  dia_cierre: number | null;
+  dia_vencimiento: number | null;
   creado_en: string;
 }
 
@@ -55,6 +57,8 @@ export interface CompraTarjeta {
   descripcion: string | null;
   categoria_id: string | null;
   cantidad_cuotas: number;
+  pagado_por: string | null;
+  tipo: TipoGasto;
   creado_en: string;
 }
 
@@ -63,6 +67,14 @@ export interface Cuota {
   compra_id: string;
   numero: number;
   importe: number;
-  mes: string; // YYYY-MM
+  mes: string; // YYYY-MM ("mesResumen")
   pagada: boolean;
+}
+
+export interface PagoTarjeta {
+  id: string;
+  tarjeta_id: string;
+  monto: number;
+  fecha: string; // YYYY-MM-DD
+  creado_en: string;
 }

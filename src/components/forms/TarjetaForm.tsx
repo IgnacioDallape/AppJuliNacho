@@ -21,7 +21,16 @@ export function TarjetaForm({
   const [tipo, setTipo] = useState<TipoTarjeta>(editing?.tipo ?? "Visa");
   const [banco, setBanco] = useState(editing?.banco ?? "");
   const [nombre, setNombre] = useState(editing?.nombre ?? "");
+  const [diaCierre, setDiaCierre] = useState(editing?.dia_cierre?.toString() ?? "");
+  const [diaVencimiento, setDiaVencimiento] = useState(
+    editing?.dia_vencimiento?.toString() ?? ""
+  );
   const [saving, setSaving] = useState(false);
+
+  const aDia = (v: string) => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n >= 1 && n <= 31 ? n : null;
+  };
 
   async function guardar() {
     if (!banco.trim() || !titularId) return;
@@ -32,6 +41,8 @@ export function TarjetaForm({
         tipo,
         banco: banco.trim(),
         nombre: nombre.trim() || null,
+        dia_cierre: aDia(diaCierre),
+        dia_vencimiento: aDia(diaVencimiento),
       };
       if (editing) await actualizarTarjeta(editing.id, payload);
       else await crearTarjeta(payload);
@@ -107,6 +118,33 @@ export function TarjetaForm({
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">Día de cierre (opcional)</label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            className="field"
+            placeholder="Ej: 25"
+            value={diaCierre}
+            onChange={(e) => setDiaCierre(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label">Día de venc. (opcional)</label>
+          <input
+            type="number"
+            min={1}
+            max={31}
+            className="field"
+            placeholder="Ej: 10"
+            value={diaVencimiento}
+            onChange={(e) => setDiaVencimiento(e.target.value)}
+          />
+        </div>
       </div>
 
       <button
