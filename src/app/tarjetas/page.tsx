@@ -7,18 +7,17 @@ import { useModals } from "@/components/modals";
 import { Icon } from "@/components/Icon";
 import { useApp } from "@/lib/store";
 import {
-  eliminarCompraTarjeta,
-  eliminarTarjeta,
   getComprasDeTarjeta,
   getCuotasDeTarjeta,
   getTarjetas,
+  setCuotasPagadas,
   type CuotaConContexto,
 } from "@/lib/data";
 import { formatDate, formatMoney, monthLabel } from "@/lib/format";
-import type { CompraTarjeta, Tarjeta, Usuario } from "@/lib/types";
+import type { CompraTarjeta, Tarjeta } from "@/lib/types";
 
 export default function TarjetasPage() {
-  const { usuarios, month, version, refresh } = useApp();
+  const { usuarios, month, version } = useApp();
   const { openTarjeta, openCompra } = useModals();
   const [tarjetas, setTarjetas] = useState<Tarjeta[]>([]);
 
@@ -60,16 +59,8 @@ export default function TarjetasPage() {
                       mes={month}
                       version={version}
                       onCompra={() => openCompra(t.id)}
-                      onDeleteTarjeta={async () => {
-                        if (confirm(`¿Eliminar esta tarjeta y sus compras?`)) {
-                          await eliminarTarjeta(t.id);
-                          refresh();
-                        }
-                      }}
-                      onDeleteCompra={async (id) => {
-                        await eliminarCompraTarjeta(id);
-                        refresh();
-                      }}
+                      onEditTarjeta={() => openTarjeta(undefined, t)}
+                      onEditCompra={(compra) => openCompra(t.id, compra)}
                     />
                   ))}
                 </div>
@@ -87,16 +78,17 @@ function TarjetaCard({
   mes,
   version,
   onCompra,
-  onDeleteTarjeta,
-  onDeleteCompra,
+  onEditTarjeta,
+  onEditCompra,
 }: {
   tarjeta: Tarjeta;
   mes: string;
   version: number;
   onCompra: () => void;
-  onDeleteTarjeta: () => void;
-  onDeleteCompra: (id: string) => void;
+  onEditTarjeta: () => void;
+  onEditCompra: (compra: CompraTarjeta) => void;
 }) {
+  const { refresh } = useApp();
   const [cuotas, setCuotas] = useState<CuotaConContexto[]>([]);
   const [compras, setCompras] = useState<CompraTarjeta[]>([]);
   const [abierta, setAbierta] = useState(false);
@@ -108,12 +100,24 @@ function TarjetaCard({
 
   const delMes = cuotas.filter((c) => c.mes === mes);
   const totalMes = delMes.reduce((s, c) => s + Number(c.importe), 0);
-  const futuras = cuotas.filter((c) => c.mes > mes);
-  const totalFuturas = futuras.reduce((s, c) => s + Number(c.importe), 0);
-  const pendiente = totalMes + totalFuturas;
+  const impagasMes = delMes.filter((c) => !c.pagada);
+  const pendienteMes = impagasMes.reduce((s, c) => s + Number(c.importe), 0);
+  const deudaTotal = cuotas
+    .filter((c) => !c.pagada)
+    .reduce((s, c) => s + Number(c.importe), 0);
 
   const nombre = tarjeta.nombre || `${tarjeta.tipo} ${tarjeta.banco}`;
+  const nombreMes = monthLabel(mes).split(" ")[0];
   const cuotasDeCompra = (id: string) => cuotas.filter((c) => c.compra_id === id);
+
+  async function pagarMes() {
+    await setCuotasPagadas(impagasMes.map((c) => c.id), true);
+    refresh();
+  }
+  async function deshacerPago() {
+    await setCuotasPagadas(delMes.map((c) => c.id), false);
+    refresh();
+  }
 
   return (
     <div className="card overflow-hidden">
@@ -130,15 +134,35 @@ function TarjetaCard({
               </p>
             </div>
           </div>
-          <button onClick={onDeleteTarjeta} aria-label="Eliminar tarjeta" className="text-muted p-1">
+          <button onClick={onEditTarjeta} aria-label="Editar tarjeta" className="text-muted p-1">
             <Icon name="dots-vertical" size={18} />
           </button>
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 mt-3">
-          <MiniStat label={`Cuotas de ${monthLabel(mes).split(" ")[0]}`} value={formatMoney(totalMes)} icon="calendar" />
-          <MiniStat label="Total pendiente" value={formatMoney(pendiente)} icon="clock" />
+          <MiniStat label={`Cuota de ${nombreMes}`} value={formatMoney(totalMes)} icon="calendar" />
+          <MiniStat label="Deuda total" value={formatMoney(deudaTotal)} icon="clock" />
         </div>
+
+        {/* Pago del mes */}
+        {totalMes > 0 && (
+          <div className="mt-3">
+            {pendienteMes > 0 ? (
+              <button onClick={pagarMes} className="btn-primary w-full py-3 text-[15px]">
+                <Icon name="check" size={18} /> Pagar {nombreMes} · {formatMoney(pendienteMes)}
+              </button>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl bg-income-soft px-3.5 py-2.5">
+                <span className="text-[13px] font-medium flex items-center gap-1.5" style={{ color: "var(--income)" }}>
+                  <Icon name="circle-check" size={17} /> {nombreMes} pagado
+                </span>
+                <button onClick={deshacerPago} className="text-[12px] text-muted underline">
+                  deshacer
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 mt-3">
           <button onClick={onCompra} className="btn-ghost flex-1 py-2.5 text-[14px]">
@@ -161,29 +185,23 @@ function TarjetaCard({
           )}
           {compras.map((c) => {
             const cs = cuotasDeCompra(c.id);
-            const pagas = cs.filter((x) => x.mes < mes).length;
+            const pagas = cs.filter((x) => x.pagada).length;
             return (
-              <div key={c.id} className="flex items-center gap-3 p-3">
+              <button
+                key={c.id}
+                onClick={() => onEditCompra(c)}
+                className="w-full flex items-center gap-3 p-3 text-left active:bg-surface-2 transition"
+              >
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium truncate">
-                    {c.descripcion || "Compra"}
-                  </p>
+                  <p className="text-[14px] font-medium truncate">{c.descripcion || "Compra"}</p>
                   <p className="text-[12px] text-muted">
                     {formatDate(c.fecha)} · {c.cantidad_cuotas === 1 ? "1 pago" : `${c.cantidad_cuotas} cuotas`}
                     {c.cantidad_cuotas > 1 && ` · ${pagas}/${c.cantidad_cuotas} pagas`}
                   </p>
                 </div>
                 <p className="text-[14px] font-semibold shrink-0">{formatMoney(c.importe_total)}</p>
-                <button
-                  onClick={() => {
-                    if (confirm("¿Eliminar esta compra y sus cuotas?")) onDeleteCompra(c.id);
-                  }}
-                  aria-label="Eliminar compra"
-                  className="text-expense p-1 shrink-0"
-                >
-                  <Icon name="trash" size={16} />
-                </button>
-              </div>
+                <Icon name="pencil" size={14} className="text-muted shrink-0" />
+              </button>
             );
           })}
         </div>

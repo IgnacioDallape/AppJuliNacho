@@ -2,9 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
-import { crearCompraTarjeta, getTarjetas } from "@/lib/data";
+import {
+  actualizarCompraTarjeta,
+  crearCompraTarjeta,
+  eliminarCompraTarjeta,
+  getTarjetas,
+} from "@/lib/data";
 import { formatMoney, todayISO } from "@/lib/format";
-import type { Tarjeta } from "@/lib/types";
+import type { CompraTarjeta, Tarjeta } from "@/lib/types";
 import { CategorySelect, MoneyInput } from "./fields";
 import { Icon } from "../Icon";
 
@@ -12,30 +17,37 @@ const CUOTAS_RAPIDAS = [1, 3, 6, 9, 12];
 
 export function CompraForm({
   tarjetaInicial,
+  editing,
   onClose,
 }: {
   tarjetaInicial?: string;
+  editing?: CompraTarjeta | null;
   onClose: () => void;
 }) {
   const { usuarios, categorias, refresh } = useApp();
   const [tarjetas, setTarjetas] = useState<Tarjeta[]>([]);
-  const [tarjetaId, setTarjetaId] = useState(tarjetaInicial ?? "");
-  const [importe, setImporte] = useState(0);
-  const [cuotas, setCuotas] = useState(1);
-  const [otra, setOtra] = useState(false);
-  const [categoriaId, setCategoriaId] = useState(
-    categorias.find((c) => c.nombre === "Compras personales")?.id ?? categorias[0]?.id ?? ""
+  const [tarjetaId, setTarjetaId] = useState(editing?.tarjeta_id ?? tarjetaInicial ?? "");
+  const [importe, setImporte] = useState(editing?.importe_total ?? 0);
+  const [cuotas, setCuotas] = useState(editing?.cantidad_cuotas ?? 1);
+  const [otra, setOtra] = useState(
+    editing ? !CUOTAS_RAPIDAS.includes(editing.cantidad_cuotas) : false
   );
-  const [fecha, setFecha] = useState(todayISO());
-  const [descripcion, setDescripcion] = useState("");
+  const [categoriaId, setCategoriaId] = useState(
+    editing?.categoria_id ??
+      categorias.find((c) => c.nombre === "Compras personales")?.id ??
+      categorias[0]?.id ??
+      ""
+  );
+  const [fecha, setFecha] = useState(editing?.fecha ?? todayISO());
+  const [descripcion, setDescripcion] = useState(editing?.descripcion ?? "");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getTarjetas().then((t) => {
       setTarjetas(t);
-      if (!tarjetaInicial && t[0]) setTarjetaId(t[0].id);
+      if (!tarjetaInicial && !editing && t[0]) setTarjetaId(t[0].id);
     });
-  }, [tarjetaInicial]);
+  }, [tarjetaInicial, editing]);
 
   const nombreUsuario = (id: string) => usuarios.find((u) => u.id === id)?.nombre ?? "";
   const etiquetaTarjeta = (t: Tarjeta) =>
@@ -50,18 +62,33 @@ export function CompraForm({
     if (importe <= 0 || !tarjetaId || cuotas < 1) return;
     setSaving(true);
     try {
-      await crearCompraTarjeta({
+      const payload = {
         tarjeta_id: tarjetaId,
         importe_total: importe,
         fecha,
         descripcion: descripcion || null,
         categoria_id: categoriaId,
         cantidad_cuotas: cuotas,
-      });
+      };
+      if (editing) await actualizarCompraTarjeta(editing.id, payload);
+      else await crearCompraTarjeta(payload);
       refresh();
       onClose();
     } catch (e) {
       alert("No se pudo guardar la compra.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function borrar() {
+    if (!editing) return;
+    if (!confirm("¿Eliminar esta compra y sus cuotas?")) return;
+    setSaving(true);
+    try {
+      await eliminarCompraTarjeta(editing.id);
+      refresh();
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -166,14 +193,31 @@ export function CompraForm({
         />
       </div>
 
+      {editing && (
+        <p className="text-[12px] text-muted flex items-center gap-1.5">
+          <Icon name="info-circle" size={15} />
+          Al editar se regeneran las cuotas (se reinicia el estado de pago).
+        </p>
+      )}
+
       <button
         className="btn-primary w-full text-[16px] py-4"
         onClick={guardar}
         disabled={saving || importe <= 0}
         style={{ opacity: saving || importe <= 0 ? 0.6 : 1 }}
       >
-        Guardar compra
+        {editing ? "Guardar cambios" : "Guardar compra"}
       </button>
+
+      {editing && (
+        <button
+          onClick={borrar}
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-3 text-[14px] text-expense"
+        >
+          Eliminar compra
+        </button>
+      )}
     </div>
   );
 }

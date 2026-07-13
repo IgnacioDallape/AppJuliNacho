@@ -28,7 +28,7 @@ export function useMonthData() {
         getIngresosDelMes(month),
         getGastosDelMes(month),
         getCuotasDelMes(month),
-        getPendienteTarjetas(month),
+        getPendienteTarjetas(),
       ]);
       setIngresos(i);
       setGastos(g);

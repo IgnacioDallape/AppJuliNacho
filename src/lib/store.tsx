@@ -28,6 +28,9 @@ interface AppState {
   version: number;
   refresh: () => void;
 
+  // recarga la lista de categorías (tras agregar/eliminar)
+  refreshCategorias: () => Promise<void>;
+
   usuarioPorNombre: (nombre: string) => Usuario | undefined;
 }
 
@@ -87,6 +90,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
 
+  const refreshCategorias = useCallback(async () => {
+    try {
+      setCategorias(await getCategorias());
+    } catch {
+      /* la pantalla de error ya cubre la desconexión */
+    }
+  }, []);
+
   const usuarioPorNombre = useCallback(
     (nombre: string) => usuarios.find((u) => u.nombre === nombre),
     [usuarios]
@@ -104,9 +115,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMonth,
       version,
       refresh,
+      refreshCategorias,
       usuarioPorNombre,
     }),
-    [usuarios, categorias, ready, error, currentUser, setCurrentUser, month, version, refresh, usuarioPorNombre]
+    [usuarios, categorias, ready, error, currentUser, setCurrentUser, month, version, refresh, refreshCategorias, usuarioPorNombre]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -30,7 +30,7 @@ interface Mov {
 export default function HistorialPage() {
   const { usuarios, categorias, refresh } = useApp();
   const { ingresos, gastos, cuotas, loading } = useMonthData();
-  const { openIngreso, openGasto } = useModals();
+  const { openIngreso, openGasto, openCompra } = useModals();
 
   const [tipo, setTipo] = useState<TipoFiltro>("todos");
   const [persona, setPersona] = useState<string>("todos");
@@ -96,6 +96,7 @@ export default function HistorialPage() {
         icon: "credit-card",
         usuarioId: t?.titular_id,
         categoriaId: c.compra?.categoria_id ?? null,
+        onEdit: c.compra ? () => openCompra(c.compra!.tarjeta_id, c.compra) : undefined,
         onDelete: async () => {
           if (c.compra) await eliminarCompraTarjeta(c.compra.id);
           refresh();
@@ -104,7 +105,7 @@ export default function HistorialPage() {
     }
 
     return items.sort((a, b) => b.fecha.localeCompare(a.fecha));
-  }, [ingresos, gastos, cuotas, catById, userById, openIngreso, openGasto, refresh]);
+  }, [ingresos, gastos, cuotas, catById, userById, openIngreso, openGasto, openCompra, refresh]);
 
   const filtrados = movimientos.filter((m) => {
     if (tipo !== "todos" && m.tipo !== tipo) return false;

@@ -5,6 +5,7 @@ import { MonthBar } from "@/components/MonthBar";
 import { MovRow } from "@/components/MovRow";
 import { EmptyState, StatCard } from "@/components/ui";
 import { useModals } from "@/components/modals";
+import { Icon } from "@/components/Icon";
 import { useApp } from "@/lib/store";
 import { useMonthData } from "@/lib/useMonth";
 import { eliminarGasto } from "@/lib/data";
@@ -16,7 +17,7 @@ type Filtro = "todos" | "personal" | "compartido";
 export default function GastosPage() {
   const { categorias, usuarios, refresh } = useApp();
   const { gastos, loading } = useMonthData();
-  const { openGasto } = useModals();
+  const { openGasto, openCategorias } = useModals();
   const [filtro, setFiltro] = useState<Filtro>("todos");
 
   const catById = useMemo(() => new Map(categorias.map((c) => [c.id, c])), [categorias]);
@@ -52,6 +53,15 @@ export default function GastosPage() {
               {f}
             </button>
           ))}
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            onClick={openCategorias}
+            className="flex items-center gap-1.5 text-[13px] text-muted py-1 active:text-accent-strong transition"
+          >
+            <Icon name="settings" size={15} /> Administrar categorías
+          </button>
         </div>
 
         <div className="space-y-2">

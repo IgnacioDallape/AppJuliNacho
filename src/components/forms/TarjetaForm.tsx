@@ -2,39 +2,56 @@
 
 import { useState } from "react";
 import { useApp } from "@/lib/store";
-import { crearTarjeta } from "@/lib/data";
-import type { TipoTarjeta } from "@/lib/types";
+import { actualizarTarjeta, crearTarjeta, eliminarTarjeta } from "@/lib/data";
+import type { Tarjeta, TipoTarjeta } from "@/lib/types";
 
 export function TarjetaForm({
   titularInicial,
+  editing,
   onClose,
 }: {
   titularInicial?: string;
+  editing?: Tarjeta | null;
   onClose: () => void;
 }) {
   const { usuarios, currentUser, refresh } = useApp();
   const [titularId, setTitularId] = useState(
-    titularInicial ?? currentUser?.id ?? usuarios[0]?.id ?? ""
+    editing?.titular_id ?? titularInicial ?? currentUser?.id ?? usuarios[0]?.id ?? ""
   );
-  const [tipo, setTipo] = useState<TipoTarjeta>("Visa");
-  const [banco, setBanco] = useState("");
-  const [nombre, setNombre] = useState("");
+  const [tipo, setTipo] = useState<TipoTarjeta>(editing?.tipo ?? "Visa");
+  const [banco, setBanco] = useState(editing?.banco ?? "");
+  const [nombre, setNombre] = useState(editing?.nombre ?? "");
   const [saving, setSaving] = useState(false);
 
   async function guardar() {
     if (!banco.trim() || !titularId) return;
     setSaving(true);
     try {
-      await crearTarjeta({
+      const payload = {
         titular_id: titularId,
         tipo,
         banco: banco.trim(),
         nombre: nombre.trim() || null,
-      });
+      };
+      if (editing) await actualizarTarjeta(editing.id, payload);
+      else await crearTarjeta(payload);
       refresh();
       onClose();
     } catch (e) {
       alert("No se pudo guardar la tarjeta.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function borrar() {
+    if (!editing) return;
+    if (!confirm("¿Eliminar esta tarjeta y todas sus compras?")) return;
+    setSaving(true);
+    try {
+      await eliminarTarjeta(editing.id);
+      refresh();
+      onClose();
     } finally {
       setSaving(false);
     }
@@ -98,8 +115,18 @@ export function TarjetaForm({
         disabled={saving || !banco.trim()}
         style={{ opacity: saving || !banco.trim() ? 0.6 : 1 }}
       >
-        Guardar tarjeta
+        {editing ? "Guardar cambios" : "Guardar tarjeta"}
       </button>
+
+      {editing && (
+        <button
+          onClick={borrar}
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-3 text-[14px] text-expense"
+        >
+          Eliminar tarjeta
+        </button>
+      )}
     </div>
   );
 }

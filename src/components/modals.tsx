@@ -7,22 +7,25 @@ import { IngresoForm } from "./forms/IngresoForm";
 import { GastoForm } from "./forms/GastoForm";
 import { TarjetaForm } from "./forms/TarjetaForm";
 import { CompraForm } from "./forms/CompraForm";
-import type { Gasto, Ingreso } from "@/lib/types";
+import { CategoriasManager } from "./forms/CategoriasManager";
+import type { CompraTarjeta, Gasto, Ingreso, Tarjeta } from "@/lib/types";
 
 type Modal =
   | { kind: "menu" }
   | { kind: "ingreso"; editing?: Ingreso | null }
   | { kind: "gasto"; editing?: Gasto | null }
-  | { kind: "tarjeta"; titular?: string }
-  | { kind: "compra"; tarjeta?: string }
+  | { kind: "tarjeta"; titular?: string; editing?: Tarjeta | null }
+  | { kind: "compra"; tarjeta?: string; editing?: CompraTarjeta | null }
+  | { kind: "categorias" }
   | null;
 
 interface ModalsApi {
   openMenu: () => void;
   openIngreso: (editing?: Ingreso | null) => void;
   openGasto: (editing?: Gasto | null) => void;
-  openTarjeta: (titular?: string) => void;
-  openCompra: (tarjeta?: string) => void;
+  openTarjeta: (titular?: string, editing?: Tarjeta | null) => void;
+  openCompra: (tarjeta?: string, editing?: CompraTarjeta | null) => void;
+  openCategorias: () => void;
   close: () => void;
 }
 
@@ -43,8 +46,9 @@ export function ModalsProvider({ children }: { children: React.ReactNode }) {
       openMenu: () => setModal({ kind: "menu" }),
       openIngreso: (editing) => setModal({ kind: "ingreso", editing }),
       openGasto: (editing) => setModal({ kind: "gasto", editing }),
-      openTarjeta: (titular) => setModal({ kind: "tarjeta", titular }),
-      openCompra: (tarjeta) => setModal({ kind: "compra", tarjeta }),
+      openTarjeta: (titular, editing) => setModal({ kind: "tarjeta", titular, editing }),
+      openCompra: (tarjeta, editing) => setModal({ kind: "compra", tarjeta, editing }),
+      openCategorias: () => setModal({ kind: "categorias" }),
       close,
     }),
     []
@@ -99,16 +103,28 @@ export function ModalsProvider({ children }: { children: React.ReactNode }) {
         {modal?.kind === "gasto" && <GastoForm editing={modal.editing} onClose={close} />}
       </Sheet>
 
-      <Sheet open={modal?.kind === "tarjeta"} title="Agregar tarjeta" onClose={close}>
+      <Sheet
+        open={modal?.kind === "tarjeta"}
+        title={modal?.kind === "tarjeta" && modal.editing ? "Editar tarjeta" : "Agregar tarjeta"}
+        onClose={close}
+      >
         {modal?.kind === "tarjeta" && (
-          <TarjetaForm titularInicial={modal.titular} onClose={close} />
+          <TarjetaForm titularInicial={modal.titular} editing={modal.editing} onClose={close} />
         )}
       </Sheet>
 
-      <Sheet open={modal?.kind === "compra"} title="Gasto de tarjeta" onClose={close}>
+      <Sheet
+        open={modal?.kind === "compra"}
+        title={modal?.kind === "compra" && modal.editing ? "Editar compra" : "Gasto de tarjeta"}
+        onClose={close}
+      >
         {modal?.kind === "compra" && (
-          <CompraForm tarjetaInicial={modal.tarjeta} onClose={close} />
+          <CompraForm tarjetaInicial={modal.tarjeta} editing={modal.editing} onClose={close} />
         )}
+      </Sheet>
+
+      <Sheet open={modal?.kind === "categorias"} title="Categorías de gastos" onClose={close}>
+        {modal?.kind === "categorias" && <CategoriasManager />}
       </Sheet>
     </Ctx.Provider>
   );

@@ -26,6 +26,22 @@ export async function getCategorias(): Promise<Categoria[]> {
   return (data ?? []) as Categoria[];
 }
 
+export async function crearCategoria(input: {
+  nombre: string;
+  icono: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from(T.categorias)
+    .insert({ nombre: input.nombre, icono: input.icono, orden: 99 });
+  if (error) throw error;
+}
+
+export async function eliminarCategoria(id: string): Promise<void> {
+  // Los gastos/compras que la usaban quedan sin categoría (FK on delete set null).
+  const { error } = await supabase.from(T.categorias).delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------------- Ingresos ----------------
 
 export async function getIngresosDelMes(mk: string): Promise<Ingreso[]> {
@@ -142,6 +158,14 @@ export async function crearTarjeta(input: {
   if (error) throw error;
 }
 
+export async function actualizarTarjeta(
+  id: string,
+  patch: Partial<Tarjeta>
+): Promise<void> {
+  const { error } = await supabase.from(T.tarjetas).update(patch).eq("id", id);
+  if (error) throw error;
+}
+
 export async function eliminarTarjeta(id: string): Promise<void> {
   const { error } = await supabase.from(T.tarjetas).delete().eq("id", id);
   if (error) throw error;
@@ -153,21 +177,17 @@ export interface CuotaConContexto extends Cuota {
   compra: (CompraTarjeta & { tarjeta: Tarjeta }) | null;
 }
 
-export async function crearCompraTarjeta(input: {
+interface CompraInput {
   tarjeta_id: string;
   importe_total: number;
   fecha: string;
   descripcion?: string | null;
   categoria_id: string | null;
   cantidad_cuotas: number;
-}): Promise<void> {
-  const { data: compra, error } = await supabase
-    .from(T.compras)
-    .insert(input)
-    .select()
-    .single();
-  if (error) throw error;
+}
 
+// Divide el importe en N cuotas mensuales consecutivas (la última absorbe el redondeo).
+function generarCuotas(compra_id: string, input: CompraInput): Omit<Cuota, "id">[] {
   const n = Math.max(1, input.cantidad_cuotas);
   const baseMes = monthOfDate(input.fecha);
   const cuotaBase = Math.round((input.importe_total / n) * 100) / 100;
@@ -175,19 +195,43 @@ export async function crearCompraTarjeta(input: {
   let acumulado = 0;
   for (let i = 0; i < n; i++) {
     const esUltima = i === n - 1;
-    // La última cuota absorbe el redondeo para que sume exacto.
     const importe = esUltima
       ? Math.round((input.importe_total - acumulado) * 100) / 100
       : cuotaBase;
     acumulado += cuotaBase;
     filas.push({
-      compra_id: (compra as CompraTarjeta).id,
+      compra_id,
       numero: i + 1,
       importe,
       mes: addMonths(baseMes, i),
       pagada: false,
     });
   }
+  return filas;
+}
+
+export async function crearCompraTarjeta(input: CompraInput): Promise<void> {
+  const { data: compra, error } = await supabase
+    .from(T.compras)
+    .insert(input)
+    .select()
+    .single();
+  if (error) throw error;
+
+  const filas = generarCuotas((compra as CompraTarjeta).id, input);
+  const { error: e2 } = await supabase.from(T.cuotas).insert(filas);
+  if (e2) throw e2;
+}
+
+// Edita una compra y regenera sus cuotas (se reinicia el estado de pago).
+export async function actualizarCompraTarjeta(
+  id: string,
+  input: CompraInput
+): Promise<void> {
+  const { error } = await supabase.from(T.compras).update(input).eq("id", id);
+  if (error) throw error;
+  await supabase.from(T.cuotas).delete().eq("compra_id", id);
+  const filas = generarCuotas(id, input);
   const { error: e2 } = await supabase.from(T.cuotas).insert(filas);
   if (e2) throw e2;
 }
@@ -195,6 +239,19 @@ export async function crearCompraTarjeta(input: {
 export async function eliminarCompraTarjeta(id: string): Promise<void> {
   // Las cuotas caen por ON DELETE CASCADE.
   const { error } = await supabase.from(T.compras).delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Marca cuotas como pagadas / no pagadas (pagar el resumen del mes de una tarjeta).
+export async function setCuotasPagadas(
+  ids: string[],
+  pagada: boolean
+): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from(T.cuotas)
+    .update({ pagada })
+    .in("id", ids);
   if (error) throw error;
 }
 
@@ -208,12 +265,12 @@ export async function getCuotasDelMes(mk: string): Promise<CuotaConContexto[]> {
   return (data ?? []) as unknown as CuotaConContexto[];
 }
 
-// Total pendiente de tarjetas: suma de todas las cuotas de este mes en adelante.
-export async function getPendienteTarjetas(mk: string): Promise<number> {
+// Deuda de tarjetas: suma de todas las cuotas que todavía NO se pagaron.
+export async function getPendienteTarjetas(): Promise<number> {
   const { data, error } = await supabase
     .from(T.cuotas)
     .select("importe")
-    .gte("mes", mk);
+    .eq("pagada", false);
   if (error) throw error;
   return (data ?? []).reduce(
     (s, c: { importe: number }) => s + Number(c.importe),

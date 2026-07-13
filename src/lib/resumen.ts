@@ -7,15 +7,15 @@ export interface ResumenUsuario {
   gastosPersonales: number; // gastos personales que pagó
   compartidosPagados: number; // gastos compartidos que pagó (monto completo)
   parteCompartida: number; // su 50% de todos los gastos compartidos
-  gastosTarjeta: number; // cuotas del mes de sus tarjetas
-  totalGastado: number; // personales + parteCompartida + tarjeta
+  gastosTarjeta: number; // cuotas PAGADAS del mes de sus tarjetas
+  totalGastado: number; // personales + parteCompartida + tarjeta pagada
   disponible: number; // ingresos - totalGastado
 }
 
 export interface ResumenPareja {
   ingresos: number;
   gastosDirectos: number; // todos los gastos (personales + compartidos)
-  gastosTarjeta: number; // cuotas del mes
+  gastosTarjeta: number; // cuotas PAGADAS del mes
   totalGastado: number;
   saldo: number;
   compartidos: number; // total de gastos compartidos
@@ -80,8 +80,9 @@ export function calcularResumen(args: {
     else r.compartidosPagados += Number(g.importe);
   }
 
-  // Cuotas del mes por titular de la tarjeta
-  for (const c of cuotas) {
+  // Cuotas PAGADAS del mes por titular de la tarjeta (lo que ya salió del bolsillo)
+  const cuotasPagadas = cuotas.filter((c) => c.pagada);
+  for (const c of cuotasPagadas) {
     const titular = c.compra?.tarjeta?.titular_id;
     if (titular && porUsuario[titular]) {
       porUsuario[titular].gastosTarjeta += Number(c.importe);
@@ -98,7 +99,7 @@ export function calcularResumen(args: {
   // ---- Pareja ----
   const ingresosTot = ingresos.reduce((s, i) => s + Number(i.importe), 0);
   const gastosDirectos = gastos.reduce((s, g) => s + Number(g.importe), 0);
-  const gastosTarjeta = cuotas.reduce((s, c) => s + Number(c.importe), 0);
+  const gastosTarjeta = cuotasPagadas.reduce((s, c) => s + Number(c.importe), 0);
 
   const hormigaGastos = gastos.filter((g) => nombreCat(g.categoria_id) === "Gastos hormiga");
   const alquilerYServicios = gastos
@@ -111,7 +112,7 @@ export function calcularResumen(args: {
     const k = nombreCat(g.categoria_id);
     mapCat.set(k, (mapCat.get(k) ?? 0) + Number(g.importe));
   }
-  for (const c of cuotas) {
+  for (const c of cuotasPagadas) {
     const k = nombreCat(c.compra?.categoria_id ?? null);
     mapCat.set(k, (mapCat.get(k) ?? 0) + Number(c.importe));
   }

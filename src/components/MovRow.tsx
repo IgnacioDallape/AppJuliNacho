@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Icon } from "./Icon";
 
 export function MovRow({
@@ -24,13 +23,12 @@ export function MovRow({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+    <div className="rounded-2xl border border-border bg-surface flex items-stretch overflow-hidden">
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 p-3 text-left active:bg-surface-2 transition"
+        onClick={onEdit}
+        disabled={!onEdit}
+        className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left active:bg-surface-2 transition disabled:active:bg-transparent"
       >
         <span
           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
@@ -46,38 +44,23 @@ export function MovRow({
           <p className="text-[15px] font-semibold" style={{ color: amountColor }}>
             {amount}
           </p>
-          {badge && <span className="text-[11px] text-muted">{badge}</span>}
+          <span className="text-[11px] text-muted flex items-center justify-end gap-1">
+            {badge && <span>{badge}</span>}
+            {onEdit && <Icon name="pencil" size={12} />}
+          </span>
         </div>
       </button>
 
-      {open && (onEdit || onDelete) && (
-        <div className="flex border-t border-border">
-          {onEdit && (
-            <button
-              onClick={() => {
-                setOpen(false);
-                onEdit();
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] text-muted active:bg-surface-2"
-            >
-              <Icon name="pencil" size={16} /> Editar
-            </button>
-          )}
-          {onEdit && onDelete && <div className="w-px bg-border" />}
-          {onDelete && (
-            <button
-              onClick={() => {
-                if (confirm("¿Eliminar este movimiento?")) {
-                  setOpen(false);
-                  onDelete();
-                }
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] text-expense active:bg-surface-2"
-            >
-              <Icon name="trash" size={16} /> Eliminar
-            </button>
-          )}
-        </div>
+      {onDelete && (
+        <button
+          onClick={() => {
+            if (confirm("¿Eliminar este movimiento?")) onDelete();
+          }}
+          aria-label="Eliminar"
+          className="px-3.5 flex items-center border-l border-border text-muted active:bg-surface-2 active:text-expense transition"
+        >
+          <Icon name="trash" size={18} />
+        </button>
       )}
     </div>
   );
