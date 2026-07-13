@@ -294,6 +294,26 @@ export async function getPagosDelMes(mk: string): Promise<PagoTarjeta[]> {
   return (data ?? []) as PagoTarjeta[];
 }
 
+// ---------------- Ajuste manual del dinero disponible ----------------
+
+// Delta que se suma al disponible calculado del mes (permite "editar" el disponible).
+export async function getAjusteDisponible(mk: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("casa_ajustes")
+    .select("monto")
+    .eq("mes", mk)
+    .maybeSingle();
+  if (error) return 0; // la tabla puede no existir aún
+  return data ? Number((data as { monto: number }).monto) : 0;
+}
+
+export async function setAjusteDisponible(mk: string, monto: number): Promise<void> {
+  const { error } = await supabase
+    .from("casa_ajustes")
+    .upsert({ mes: mk, monto }, { onConflict: "mes" });
+  if (error) throw error;
+}
+
 // Cuota "plana" para proyección/saldos (resuelve tarjeta y descripción vía la compra).
 export interface CuotaPlana {
   id: string;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "./store";
 import {
+  getAjusteDisponible,
   getCuotasDelMes,
   getGastosDelMes,
   getIngresosDelMes,
@@ -22,22 +23,25 @@ export function useMonthData() {
   const [loading, setLoading] = useState(true);
   const [resumen, setResumen] = useState<ResumenMes | null>(null);
   const [pendienteTarjetas, setPendienteTarjetas] = useState(0);
+  const [ajuste, setAjuste] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [i, g, c, pend, pagosMes, tarjetas] = await Promise.all([
+      const [i, g, c, pend, pagosMes, tarjetas, aj] = await Promise.all([
         getIngresosDelMes(month),
         getGastosDelMes(month),
         getCuotasDelMes(month),
         getPendienteTarjetas(),
         getPagosDelMes(month),
         getTarjetas(),
+        getAjusteDisponible(month),
       ]);
       setIngresos(i);
       setGastos(g);
       setCuotas(c);
       setPendienteTarjetas(pend);
+      setAjuste(aj);
 
       const titularDe = new Map(tarjetas.map((t) => [t.id, t.titular_id]));
       const pagos: PagoConTitular[] = pagosMes.map((p) => ({
@@ -45,9 +49,10 @@ export function useMonthData() {
         titular_id: titularDe.get(p.tarjeta_id) ?? null,
       }));
 
-      setResumen(
-        calcularResumen({ usuarios, categorias, ingresos: i, gastos: g, pagos })
-      );
+      const res = calcularResumen({ usuarios, categorias, ingresos: i, gastos: g, pagos });
+      // Ajuste manual: se suma al disponible calculado de la pareja.
+      res.pareja.saldo += aj;
+      setResumen(res);
     } finally {
       setLoading(false);
     }
@@ -58,5 +63,5 @@ export function useMonthData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, version, usuarios.length, categorias.length]);
 
-  return { ingresos, gastos, cuotas, resumen, pendienteTarjetas, loading, reload: load };
+  return { ingresos, gastos, cuotas, resumen, pendienteTarjetas, ajuste, loading, reload: load };
 }
